@@ -3,16 +3,19 @@
 
 #include <sourcemod>
 #include <left4dhooks>
+#include <colors>
 
 #define DEBUG 1
 #define DEBUG_QUEUE		1	// Queue operations and spawning
 #define DEBUG_LIMITS	1	// Limit checking and validation
 #define DEBUG_REBALANCE	1	// Rebalancing and configuration changes
 #define DEBUG_EVENTS	1	// Player events and state changes
+#define DEBUG_LOG_FILE	"logs/FixSpawnOrder.log"
 
 #define PLUGIN_VERSION "4.5"
 #define STRING_SEPARATOR ", "
 #define STRING_SACK_ORDER "[Sack Order]"
+#define FSO_PREFIX "[{olive}FSO{default}]"
 
 /* These class numbers are the same ones used internally in L4D2 */
 #define SI_GENERIC_BEGIN 1 // L4D2Infected_Smoker  
@@ -23,6 +26,8 @@
 #define MAX_SI_ARRAY_SIZE 128
 #define NUM_SI_CLASSES 6  // Smoker, Boomer, Hunter, Spitter, Jockey, Charger
 #define REBALANCE_THROTTLE_TIME 2.0  // Minimum time between rebalances
+#define MIN_QUEUE_SIZE 2  // Minimum queue size for proper rotation
+#define DEFAULT_TEAM_SIZE 4  // Default infected team size
 
 // Forward constants
 #define FSO_REFILL_AUTOMATIC		0	// Queue refilled automatically
@@ -49,6 +54,9 @@ int g_ZombieClass;
 // Ghost state tracking
 bool isCulling = false;
 
+// Safe area tracking for bot spawn control
+bool g_bSurvivorsLeftSafeArea = false;
+
 GlobalForward
 	g_fwdOnRebalanceTriggered,
 	g_fwdOnQueueUpdated,
@@ -72,6 +80,8 @@ enum OverLimitReason
 	OverLimit_Dominator,
 	OverLimit_Class
 }
+
+char g_sLogPath[PLATFORM_MAX_PATH];
 
 /**
  * Enumeration for different log categories
@@ -99,27 +109,38 @@ methodmap SOLog
 	 * @param ...       Additional arguments for formatting the message.
 	 *
 	 * The function uses SourceMod's VFormat to format the message and
-	 * PrintToChatAll to display it to all players. The prefix colorizes and
+	 * CPrintToChatAll to display it to all players with colors. The prefix colorizes and
 	 * categorizes the message for easier identification in chat.
 	 */
 	public static void WriteLog(SOLogCategory category, const char[] message, any...)
 	{
 		static char sFormat[256];  // Optimized for SourceMod chat limit
-		static char sPrefix[24];
+		static char sPrefix[64];   // Increased size for colored prefix
 		
 		VFormat(sFormat, sizeof(sFormat), message, 3);
 		
 		switch (category)
 		{
-			case SOLog_General: strcopy(sPrefix, sizeof(sPrefix), "\x04[SO]\x01");
-			case SOLog_Queue: strcopy(sPrefix, sizeof(sPrefix), "\x04[SO][Queue]\x01");
-			case SOLog_Limits: strcopy(sPrefix, sizeof(sPrefix), "\x04[SO][Limits]\x01");
-			case SOLog_Rebalance: strcopy(sPrefix, sizeof(sPrefix), "\x04[SO][Rebalance]\x01");
-			case SOLog_Events: strcopy(sPrefix, sizeof(sPrefix), "\x04[SO][Events]\x01");
-			default: strcopy(sPrefix, sizeof(sPrefix), "\x04[SO][Unknown]\x01");
+			case SOLog_General: 
+				strcopy(sPrefix, sizeof(sPrefix), FSO_PREFIX);
+			case SOLog_Queue: 
+				Format(sPrefix, sizeof(sPrefix), "%s[{blue}Queue{default}]", FSO_PREFIX);
+			case SOLog_Limits: 
+				Format(sPrefix, sizeof(sPrefix), "%s[{red}Limits{default}]", FSO_PREFIX);
+			case SOLog_Rebalance: 
+				Format(sPrefix, sizeof(sPrefix), "%s[{orange}Rebalance{default}]", FSO_PREFIX);
+			case SOLog_Events: 
+				Format(sPrefix, sizeof(sPrefix), "%s[{lightgreen}Events{default}]", FSO_PREFIX);
+			default: 
+				Format(sPrefix, sizeof(sPrefix), "%s[{red}Unknown{default}]", FSO_PREFIX);
 		}
 		
-		PrintToChatAll("%s %s", sPrefix, sFormat);
+		char sColoredMessage[512];
+		Format(sColoredMessage, sizeof(sColoredMessage), "%s %s", sPrefix, sFormat);
+		
+		CPrintToChatAll("%s", sColoredMessage);
+		CRemoveTags(sColoredMessage, sizeof(sColoredMessage));
+		LogToFileEx(g_sLogPath, "%s", sColoredMessage);
 	}
 	
 
@@ -227,12 +248,22 @@ public Plugin myinfo =
 	url = "https://github.com/AoC-Gamers/L4D2-Fix-Spawn-Order"
 };
 
+public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int iErr_max)
+{
+	RegisterNatives();
+	RegisterForwards();
+	RegPluginLibrary("l4d2_fix_spawn_order");
+	return APLRes_Success;
+}
+
 public void OnPluginStart()
 {
+	BuildPath(Path_SM, g_sLogPath, sizeof(g_sLogPath), DEBUG_LOG_FILE);
 	g_SIConfig.Init();
+	InitSpawnConfiguration();
+	
+	g_SpawnsArray = new ArrayList();
 	g_ZombieClass = SI_None;
-
-	InitializeAPI();
 	
 	HookEvent("round_start", Event_RoundStart);
 	HookEvent("round_end", Event_RoundEnd);
@@ -242,16 +273,18 @@ public void OnPluginStart()
 	
 	HookEvent("player_death", Event_PlayerDeath);
 	
-	InitSpawnConfiguration();
 	z_max_player_zombies = FindConVar("z_max_player_zombies");
 	
-	g_SpawnsArray = new ArrayList();
+	RegAdminCmd("sm_fso_force_safearea_exit", Command_ForceSafeAreaExit, ADMFLAG_ROOT, "Force survivors to be considered as having left safe area");
+	RegAdminCmd("sm_fso_reset_safearea", Command_ResetSafeArea, ADMFLAG_ROOT, "Reset safe area status (disable bot spawning)");
+	RegAdminCmd("sm_fso_check_safearea", Command_CheckSafeArea, ADMFLAG_ROOT, "Check current safe area status");
 }
 
 public void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
 	g_gameState.isLive = false;
 	g_SpawnsArray.Clear();
+	g_bSurvivorsLeftSafeArea = false; // Reset safe area status
 }
 
 public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
@@ -276,8 +309,38 @@ public void Event_RealRoundStart(Event event, const char[] name, bool dontBroadc
 	FireGameStateChangedForward(wasLive, g_gameState.isLive, g_gameState.isFinale, g_gameState.isFinale); 
 	FireRoundTransitionForward(oldRound, g_gameState.currentRound, g_gameState.isFinale);
 	
+	// Check if survivors have already left safe area (in case of late plugin load)
+	g_bSurvivorsLeftSafeArea = L4D_HasAnySurvivorLeftSafeArea();
+	
 	FillQueue();
 	FireQueueRefilledForward(g_SpawnsArray.Length, FSO_REFILL_ROUND_START);
+	
+	SOLog.Events("Round started - Survivors left safe area: {olive}%s{default}", g_bSurvivorsLeftSafeArea ? "Yes" : "No");
+}
+
+/**
+ * Called when the first survivor leaves the safe area
+ * This triggers bot spawning to begin
+ */
+public void L4D_OnFirstSurvivorLeftSafeArea_Post(int client)
+{
+	if (!g_gameState.isLive)
+		return;
+	
+	g_bSurvivorsLeftSafeArea = true;
+	
+	SOLog.Events("First survivor {olive}%N{default} left safe area - Bot spawning now enabled", client);
+	
+	// Fire our custom forward to notify other plugins
+	if (g_fwdOnGameStateChanged != null)
+	{
+		Call_StartForward(g_fwdOnGameStateChanged);
+		Call_PushCell(false); // wasLive - doesn't change
+		Call_PushCell(true);  // isLive - doesn't change  
+		Call_PushCell(false); // wasFinale - doesn't change
+		Call_PushCell(g_gameState.isFinale); // isFinale - doesn't change
+		Call_Finish();
+	}
 }
 
 /**
@@ -300,6 +363,96 @@ void GetOverLimitReasonText(OverLimitReason reason, char[] buffer, int maxlen)
 		case OverLimit_OK: buffer[0] = '\0';
 		case OverLimit_Dominator: strcopy(buffer, maxlen, "Dominator limit");
 		case OverLimit_Class: strcopy(buffer, maxlen, "Class limit");
-		default: FormatEx(buffer, maxlen, "Unknown reason (%d)", reason);
+		default: FormatEx(buffer, maxlen, "Unknown reason ({olive}%d{default})", reason);
 	}
+}
+
+// ====================================================================================================
+// SAFE ZOMBIE CLASS NAME UTILITY
+// ====================================================================================================
+
+/**
+ * Get zombie class name safely, handling invalid indices
+ */
+stock void GetSafeZombieClassName(int zombieClass, char[] buffer, int maxlen)
+{
+	if (zombieClass == SI_None)
+	{
+		strcopy(buffer, maxlen, "None");
+		return;
+	}
+	
+	if (zombieClass < g_SIConfig.genericBegin || zombieClass >= g_SIConfig.genericEnd)
+	{
+		FormatEx(buffer, maxlen, "Invalid({olive}%d{default})", zombieClass);
+		return;
+	}
+	
+	strcopy(buffer, maxlen, L4D2ZombieClassname[zombieClass - 1]);
+}
+
+// ====================================================================================================
+// SAFE AREA ADMIN COMMANDS
+// ====================================================================================================
+
+/**
+ * Force survivors to be considered as having left safe area
+ */
+public Action Command_ForceSafeAreaExit(int client, int args)
+{
+	g_bSurvivorsLeftSafeArea = true;
+	
+	SOLog.Events("Admin {olive}%N{default} forced safe area exit - Bot spawning enabled", client);
+	ReplyToCommand(client, "[FSO] Safe area status set to: Left (Bot spawning enabled)");
+	
+	return Plugin_Handled;
+}
+
+/**
+ * Reset safe area status (disable bot spawning)
+ */
+public Action Command_ResetSafeArea(int client, int args)
+{
+	g_bSurvivorsLeftSafeArea = false;
+	
+	SOLog.Events("Admin {olive}%N{default} reset safe area status - Bot spawning disabled", client);
+	ReplyToCommand(client, "[FSO] Safe area status set to: In Safe Area (Bot spawning disabled)");
+	
+	return Plugin_Handled;
+}
+
+/**
+ * Check current safe area status
+ */
+public Action Command_CheckSafeArea(int client, int args)
+{
+	bool actualStatus = L4D_HasAnySurvivorLeftSafeArea();
+	
+	ReplyToCommand(client, "[FSO] Safe Area Status:");
+	ReplyToCommand(client, "  Plugin tracking: {olive}%s{default}", g_bSurvivorsLeftSafeArea ? "Left" : "In Safe Area");
+	ReplyToCommand(client, "  Game state: {olive}%s{default}", actualStatus ? "Left" : "In Safe Area");
+	ReplyToCommand(client, "  Bot spawning: {olive}%s{default}", g_bSurvivorsLeftSafeArea ? "Enabled" : "Disabled");
+	
+	if (g_bSurvivorsLeftSafeArea != actualStatus)
+	{
+		ReplyToCommand(client, "  WARNING: Plugin state differs from game state!");
+	}
+	
+	return Plugin_Handled;
+}
+
+// ====================================================================================================
+// UTILITY FUNCTIONS
+// ====================================================================================================
+
+
+/**
+ * Checks if the given client index is valid.
+ *
+ * @param iClient      The client index to validate.
+ * @return             True if the client index is greater than 0 and less than or equal to MaxClients, false otherwise.
+ */
+bool IsValidClientIndex(int iClient)
+{
+	return (iClient > 0 && iClient <= MaxClients);
 }

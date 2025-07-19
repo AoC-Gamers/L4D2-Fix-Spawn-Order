@@ -8,7 +8,7 @@
  */
 bool SetPlayerClass(int client, int newClass)
 {
-	if (client < 1 || client > MaxClients || !IsClientInGame(client))
+	if (!IsValidClientIndex(client) || !IsClientInGame(client))
 		return false;
 		
 	if (newClass != SI_None && (newClass < g_SIConfig.genericBegin || newClass >= g_SIConfig.genericEnd))
@@ -20,17 +20,9 @@ bool SetPlayerClass(int client, int newClass)
 	
 	// Use safe class name getter for debug output
 	char oldClassName[32], newClassName[32];
-	char noneString[] = "None";  // Local variable instead of global constant
 	
-	if (oldClass == SI_None)
-		strcopy(oldClassName, sizeof(oldClassName), noneString);
-	else
-		strcopy(oldClassName, sizeof(oldClassName), L4D2ZombieClassname[oldClass - 1]);
-		
-	if (newClass == SI_None)
-		strcopy(newClassName, sizeof(newClassName), noneString);
-	else
-		strcopy(newClassName, sizeof(newClassName), L4D2ZombieClassname[newClass - 1]);
+	GetSafeZombieClassName(oldClass, oldClassName, sizeof(oldClassName));
+	GetSafeZombieClassName(newClass, newClassName, sizeof(newClassName));
 	
 	SOLog.Events("Player %N class changed: %s -> %s", client, oldClassName, newClassName);
 	
@@ -52,7 +44,7 @@ bool SetPlayerClass(int client, int newClass)
  */
 int GetPlayerStoredClass(int client)
 {
-	if (client < 1 || client > MaxClients)
+	if (!IsValidClientIndex(client))
 		return SI_None;
 		
 	return g_gameState.players[client].storedClass;
@@ -63,7 +55,7 @@ int GetPlayerStoredClass(int client)
  */
 void ResetPlayerState(int client)
 {
-	if (client < 1 || client > MaxClients)
+	if (!IsValidClientIndex(client))
 		return;
 		
 	g_gameState.players[client].storedClass = SI_None;
@@ -99,6 +91,10 @@ public void OnClientPutInServer(int client)
  */
 public void OnClientDisconnect(int client)
 {
+	// Validate client index before using it
+	if (!IsValidClientIndex(client))
+		return;
+		
 	if (!IsClientInGame(client))
 		return;
 		
@@ -137,6 +133,10 @@ public Action Timer_CleanupPlayerState(Handle timer, int userid)
  */
 public void L4D_OnMaterializeFromGhost_PostHandled(int client)
 {
+	// Validate client index before using it
+	if (!IsValidClientIndex(client))
+		return;
+		
 	if (!IsClientInGame(client) || !IsClientInfected(client))
 		return;
 	
@@ -148,7 +148,9 @@ public void L4D_OnMaterializeFromGhost_PostHandled(int client)
 	if (g_SIConfig.IsValidSpawnableClass(zombieClass))
 	{
 		SetPlayerClass(client, zombieClass);
-		SOLog.Events("\x05%N \x05materialized \x01as (\x04%s\x01)", client, L4D2ZombieClassname[zombieClass - 1]);
+		char zombieClassName[32];
+		GetSafeZombieClassName(zombieClass, zombieClassName, sizeof(zombieClassName));
+		SOLog.Events("\x05%N \x05materialized \x01as (\x04%s\x01)", client, zombieClassName);
 	}
 	else
 	{
@@ -204,12 +206,19 @@ void HandleCapacityOverflow(int client)
  */
 public void L4D_OnEnterGhostState(int client)
 {
+	// Validate client index before using it
+	if (!IsValidClientIndex(client))
+		return;
+		
 	if (!IsClientInGame(client) || !IsClientInfected(client))
 		return;
 		
 	if (IsPlayerAlive(client))
 	{
-		SOLog.Events("\x05%N \x01left Infected Team \x01as (\x04%s\x01)", client, L4D2ZombieClassname[view_as<int>(L4D2_GetPlayerZombieClass(client)) - 1]);
+		int playerClass = view_as<int>(L4D2_GetPlayerZombieClass(client));
+		char zombieClassName[32];
+		GetSafeZombieClassName(playerClass, zombieClassName, sizeof(zombieClassName));
+		SOLog.Events("\x05%N \x01left Infected Team \x01as (\x04%s\x01)", client, zombieClassName);
 		
 		// Use the centralized queue system
 		QueuePlayerSI(client);
@@ -227,10 +236,17 @@ public void Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast
 {
 	int client = GetClientOfUserId(event.GetInt("userid"));
 	
+	// Validate client index before using it
+	if (!IsValidClientIndex(client))
+		return;
+		
 	if (!IsClientInGame(client) || !IsClientInfected(client))
 		return;
 		
-	SOLog.Events("\x05%N \x01died \x01as (\x04%s\x01)", client, L4D2ZombieClassname[view_as<int>(L4D2_GetPlayerZombieClass(client)) - 1]);
+	int playerClass = view_as<int>(L4D2_GetPlayerZombieClass(client));
+	char zombieClassName[32];
+	GetSafeZombieClassName(playerClass, zombieClassName, sizeof(zombieClassName));
+	SOLog.Events("\x05%N \x01died \x01as (\x04%s\x01)", client, zombieClassName);
 	
 	// Queue the player's class back using centralized system
 	QueuePlayerSI(client);
@@ -245,6 +261,10 @@ public void Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast
  */
 public void L4D_OnReplaceTank(int tank, int newtank)
 {
+	// Validate client indices before using them
+	if (!IsValidClientIndex(tank) || !IsValidClientIndex(newtank))
+		return;
+		
 	if (!IsClientInGame(tank) || !IsClientInGame(newtank))
 		return;
 	
@@ -261,16 +281,24 @@ public void L4D_OnReplaceTank(int tank, int newtank)
 	// Handle AI tank replacement
 	if (IsFakeClient(tank))
 	{
-		SOLog.Events("\x05%N \x01replaced \x05%N \x01as (\x04%s\x01)", newtank, tank, L4D2ZombieClassname[view_as<int>(L4D2_GetPlayerZombieClass(newtank)) - 1]);
+		int newTankClass = view_as<int>(L4D2_GetPlayerZombieClass(newtank));
+		char newTankClassName[32];
+		GetSafeZombieClassName(newTankClass, newTankClassName, sizeof(newTankClassName));
+		SOLog.Events("\x05%N \x01replaced \x05%N \x01as (\x04%s\x01)", newtank, tank, newTankClassName);
 		
 		if (tankClass != SI_None)
 		{
-			SOLog.Events("\x05%N \x01(\x04%s\x01) \x01replaced an \x04AI Tank", newtank, L4D2ZombieClassname[GetPlayerStoredClass(newtank) - 1]);
+			char storedClassName[32];
+			GetSafeZombieClassName(GetPlayerStoredClass(newtank), storedClassName, sizeof(storedClassName));
+			SOLog.Events("\x05%N \x01(\x04%s\x01) \x01replaced an \x04AI Tank", newtank, storedClassName);
 		}
 	}
 	else
 	{
-		SOLog.Events("\x05%N \x01(\x04%s\x01) \x01is going to replace \x05%N\x01's \x04Tank", newtank, L4D2ZombieClassname[view_as<int>(L4D2_GetPlayerZombieClass(newtank)) - 1], tank);
+		int newTankClass = view_as<int>(L4D2_GetPlayerZombieClass(newtank));
+		char newTankClassName[32];
+		GetSafeZombieClassName(newTankClass, newTankClassName, sizeof(newTankClassName));
+		SOLog.Events("\x05%N \x01(\x04%s\x01) \x01is going to replace \x05%N\x01's \x04Tank", newtank, newTankClassName, tank);
 	}
 }
 
@@ -283,6 +311,10 @@ public void L4D_OnReplaceTank(int tank, int newtank)
  */
 public void L4D_OnSpawnSpecial_Post(int client, int zombieClass, const float vecPos[3], const float vecAng[3])
 {
+	// Validate client index before using it
+	if (!IsValidClientIndex(client))
+		return;
+		
 	if (!IsClientInGame(client) || !IsClientInfected(client))
 		return;
 		
@@ -290,7 +322,9 @@ public void L4D_OnSpawnSpecial_Post(int client, int zombieClass, const float vec
 	SetPlayerClass(client, zombieClass);
 	g_gameState.players[client].hasSpawned = true;
 	
-	SOLog.Events("%N %s \x01as (\x04%s\x01)", client, isCulling ? "\x05respawned" : "\x01spawned", L4D2ZombieClassname[zombieClass - 1]);
+	char zombieClassName[32];
+	GetSafeZombieClassName(zombieClass, zombieClassName, sizeof(zombieClassName));
+	SOLog.Events("%N %s \x01as (\x04%s\x01)", client, isCulling ? "\x05respawned" : "\x01spawned", zombieClassName);
 }
 
 /**
@@ -298,7 +332,16 @@ public void L4D_OnSpawnSpecial_Post(int client, int zombieClass, const float vec
  */
 public Action L4D_OnSpawnSpecial(int &zombieClass, const float vecPos[3], const float vecAng[3])
 {
-	SOLog.Events("Director attempting to spawn (\x04%s\x01)", L4D2ZombieClassname[zombieClass - 1]);
+	char zombieClassName[32];
+	GetSafeZombieClassName(zombieClass, zombieClassName, sizeof(zombieClassName));
+	SOLog.Events("Director attempting to spawn (\x04%s\x01)", zombieClassName);
+	
+	// Block bot spawning if survivors haven't left safe area yet
+	if (!g_bSurvivorsLeftSafeArea)
+	{
+		SOLog.Events("Blocking bot spawn - survivors still in safe area");
+		return Plugin_Handled;
+	}
 	
 	// Check if we're over the player limit
 	if (GetTotalInfectedPlayers() >= z_max_player_zombies.IntValue)
@@ -316,7 +359,8 @@ public Action L4D_OnSpawnSpecial(int &zombieClass, const float vecPos[3], const 
 	}
 	
 	zombieClass = g_ZombieClass;
-	SOLog.Events("Overriding director spawn to (\x04%s\x01)", L4D2ZombieClassname[g_ZombieClass - 1]);
+	GetSafeZombieClassName(g_ZombieClass, zombieClassName, sizeof(zombieClassName));
+	SOLog.Events("Overriding director spawn to (\x04%s\x01)", zombieClassName);
 	
 	return Plugin_Changed;
 }
@@ -328,7 +372,14 @@ public void L4D_OnSpawnSpecial_PostHandled(int client, int zombieClass, const fl
 {
 	if (g_ZombieClass != SI_None)
 	{
-		SOLog.Events("Director spawned a bot (expected \x05%s\x01, got %s%s\x01)", L4D2ZombieClassname[g_ZombieClass - 1], g_ZombieClass == zombieClass ? "\x05" : "\x04", L4D2ZombieClassname[zombieClass - 1]);
+		char expectedClassName[32], actualClassName[32];
+		GetSafeZombieClassName(g_ZombieClass, expectedClassName, sizeof(expectedClassName));
+		GetSafeZombieClassName(zombieClass, actualClassName, sizeof(actualClassName));
+		
+		SOLog.Events("Director spawned a bot (expected \x05%s\x01, got %s%s\x01)", 
+			expectedClassName, 
+			g_ZombieClass == zombieClass ? "\x05" : "\x04", 
+			actualClassName);
 		
 		if (g_ZombieClass != zombieClass)
 		{
@@ -340,7 +391,10 @@ public void L4D_OnSpawnSpecial_PostHandled(int client, int zombieClass, const fl
 	}
 	else
 	{
-		SOLog.Events("Director's spawn was \x04blocked \x01(expected \x05%s\x01, got %s%s\x01)", L4D2ZombieClassname[g_ZombieClass - 1], g_ZombieClass == zombieClass ? "\x05" : "\x04", L4D2ZombieClassname[zombieClass - 1]);
+		// The spawn was blocked, but director still spawned something
+		char actualClassName[32];
+		GetSafeZombieClassName(zombieClass, actualClassName, sizeof(actualClassName));
+		SOLog.Events("Director spawned unexpected bot \x04%s\x01 (spawn was blocked)", actualClassName);
 	}
 }
 

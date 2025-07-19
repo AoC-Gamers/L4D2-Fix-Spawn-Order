@@ -7,12 +7,8 @@
 // NATIVES AND FORWARDS DEFINITION
 // ====================================================================================================
 
-/**
- * Initialize API system
- */
-void InitializeAPI()
+void RegisterNatives()
 {
-	// Create natives
 	CreateNative("FSO_GetQueuedSI", Native_GetQueuedSI);
 	CreateNative("FSO_SetQueuedSI", Native_SetQueuedSI);
 	CreateNative("FSO_GetPlayerStoredClass", Native_GetPlayerStoredClass);
@@ -22,8 +18,10 @@ void InitializeAPI()
 	CreateNative("FSO_ClearQueue", Native_ClearQueue);
 	CreateNative("FSO_TriggerRebalance", Native_TriggerRebalance);
 	CreateNative("FSO_GetGameState", Native_GetGameState);
-	
-	// Create forwards
+}
+
+void RegisterForwards()
+{
 	g_fwdOnRebalanceTriggered = new GlobalForward("FSO_OnRebalanceTriggered", ET_Event, Param_String);
 	g_fwdOnQueueUpdated = new GlobalForward("FSO_OnQueueUpdated", ET_Event, Param_Cell, Param_Cell);
 	g_fwdOnPlayerClassChanged = new GlobalForward("FSO_OnPlayerClassChanged", ET_Event, Param_Cell, Param_Cell, Param_Cell);
@@ -36,9 +34,9 @@ void InitializeAPI()
 	g_fwdOnGameStateChanged = new GlobalForward("FSO_OnGameStateChanged", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_Cell);
 	g_fwdOnRoundTransition = new GlobalForward("FSO_OnRoundTransition", ET_Event, Param_Cell, Param_Cell, Param_Cell);
 	g_fwdOnConfigurationChanged = new GlobalForward("FSO_OnConfigurationChanged", ET_Event, Param_String, Param_Any, Param_Any);
-	
-	SOLog.Debug("API system initialized with %d natives and %d forwards", 9, 12);
 }
+
+
 
 // ====================================================================================================
 // NATIVE IMPLEMENTATIONS
@@ -126,7 +124,7 @@ public int Native_GetPlayerStoredClass(Handle plugin, int numParams)
 {
 	int client = GetNativeCell(1);
 	
-	if (client < 1 || client > MaxClients)
+	if (!IsValidClientIndex(client))
 	{
 		ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index: %d", client);
 		return SI_None;
@@ -144,7 +142,7 @@ public int Native_SetPlayerStoredClass(Handle plugin, int numParams)
 	int client = GetNativeCell(1);
 	int zombieClass = GetNativeCell(2);
 	
-	if (client < 1 || client > MaxClients)
+	if (!IsValidClientIndex(client))
 	{
 		ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index: %d", client);
 		return false;
@@ -169,7 +167,7 @@ public int Native_IsPlayerSpawned(Handle plugin, int numParams)
 {
 	int client = GetNativeCell(1);
 	
-	if (client < 1 || client > MaxClients)
+	if (!IsValidClientIndex(client))
 	{
 		ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index: %d", client);
 		return false;

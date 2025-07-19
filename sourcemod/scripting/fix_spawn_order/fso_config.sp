@@ -178,16 +178,17 @@ void ResetSpawnConfiguration()
  */
 void UpdateSpawnConfiguration()
 {
-	int currentPlayers = GetInfectedPlayerCount();
+	int humanInfected = GetInfectedPlayerCount();
+	int totalInfected = GetTotalInfectedPlayers(); // From fso_queue_limits.sp
 	int maxPlayers = g_cvSIMaxCapacity.IntValue;
 	
-	g_gameState.currentPlayerCount = currentPlayers;
+	g_gameState.currentPlayerCount = humanInfected;
 	g_gameState.expectedPlayerCount = maxPlayers;
 	
 	// Calculate scaling factor if dynamic scaling is enabled
 	if (g_SpawnConfig.isDynamic && maxPlayers > 0)
 	{
-		g_SpawnConfig.scalingFactor = float(currentPlayers) / float(maxPlayers);
+		g_SpawnConfig.scalingFactor = float(humanInfected) / float(maxPlayers);
 		
 		// Apply minimum scaling threshold
 		if (g_SpawnConfig.scalingFactor < 0.5)
@@ -201,8 +202,13 @@ void UpdateSpawnConfiguration()
 	// Update adjusted limits
 	UpdateAdjustedLimits();
 	
-	SOLog.Rebalance("Configuration updated - Players: %d/%d, Scaling: %.2f", 
-		currentPlayers, maxPlayers, g_SpawnConfig.scalingFactor);
+	// Create detailed status message
+	char queueInfo[256];
+	GetQueueCompositionString(queueInfo, sizeof(queueInfo));
+	
+	SOLog.Rebalance("Configuration updated - Infected: %d humans + %d bots = %d/%d, Scaling: %.2f", 
+		humanInfected, totalInfected - humanInfected, totalInfected, maxPlayers, g_SpawnConfig.scalingFactor);
+	SOLog.Rebalance("Queue composition: %s", queueInfo);
 }
 
 /**
@@ -352,6 +358,79 @@ public void OnPluginConVarChanged(ConVar convar, const char[] oldValue, const ch
 		{
 			ScheduleRebalance("Max capacity change");
 		}
+	}
+}
+
+// ====================================================================================================
+// QUEUE COMPOSITION UTILITIES
+// ====================================================================================================
+
+/**
+ * Get a formatted string showing current queue composition by SI types
+ */
+void GetQueueCompositionString(char[] buffer, int maxlen)
+{
+	// Get current queue size
+	int queueSize = g_SpawnsArray.Length;
+	
+	if (queueSize == 0)
+	{
+		strcopy(buffer, maxlen, "Empty");
+		return;
+	}
+	
+	// Count each SI type in queue
+	int counts[7]; // 0=none, 1=smoker, 2=boomer, 3=hunter, 4=spitter, 5=jockey, 6=charger
+	for (int i = 0; i < queueSize; i++)
+	{
+		int siClass = g_SpawnsArray.Get(i);
+		if (siClass >= 1 && siClass <= 6)
+		{
+			counts[siClass]++;
+		}
+	}
+	
+	// Build composition string
+	buffer[0] = '\0';
+	bool hasAny = false;
+	
+	for (int i = 1; i <= 6; i++)
+	{
+		if (counts[i] > 0)
+		{
+			char className[16];
+			GetSIClassName(i, className, sizeof(className));
+			
+			if (hasAny)
+			{
+				Format(buffer, maxlen, "%s, ", buffer);
+			}
+			
+			Format(buffer, maxlen, "%s%dx%s", buffer, counts[i], className);
+			hasAny = true;
+		}
+	}
+	
+	if (!hasAny)
+	{
+		strcopy(buffer, maxlen, "No valid SI in queue");
+	}
+}
+
+/**
+ * Get SI class name by index
+ */
+void GetSIClassName(int classIndex, char[] buffer, int maxlen)
+{
+	switch (classIndex)
+	{
+		case 1: strcopy(buffer, maxlen, "Smoker");
+		case 2: strcopy(buffer, maxlen, "Boomer");
+		case 3: strcopy(buffer, maxlen, "Hunter");
+		case 4: strcopy(buffer, maxlen, "Spitter");
+		case 5: strcopy(buffer, maxlen, "Jockey");
+		case 6: strcopy(buffer, maxlen, "Charger");
+		default: Format(buffer, maxlen, "Unknown(%d)", classIndex);
 	}
 }
 

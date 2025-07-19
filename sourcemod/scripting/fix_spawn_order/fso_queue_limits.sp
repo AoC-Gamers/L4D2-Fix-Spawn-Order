@@ -36,7 +36,9 @@ void QueueSI(int SI, bool front)
 		Call_Finish();
 	}
 	
-	SOLog.Queue("Queuing (\x05%s\x01) to \x04%s", L4D2ZombieClassname[SI - 1], front ? "the front" : "the end");
+	char zombieClassName[32];
+	GetSafeZombieClassName(SI, zombieClassName, sizeof(zombieClassName));
+	SOLog.Queue("Queuing (\x05%s\x01) to \x04%s", zombieClassName, front ? "the front" : "the end");
 }
 
 /**
@@ -45,7 +47,7 @@ void QueueSI(int SI, bool front)
  */
 void QueuePlayerSI(int client)
 {
-	if (client < 1 || client > MaxClients)
+	if (!IsValidClientIndex(client))
 		return;
 		
 	int SI = GetPlayerStoredClass(client);
@@ -118,14 +120,18 @@ int PopQueuedSI(int skip_client)
 				Call_Finish();
 			}
 			
-			SOLog.Queue("Popped (\x05%s\x01) after \x04%i \x01%s", L4D2ZombieClassname[QueuedSI - 1], i+1, i+1 > 1 ? "tries" : "try");
+			char zombieClassName[32];
+			GetSafeZombieClassName(QueuedSI, zombieClassName, sizeof(zombieClassName));
+			SOLog.Queue("Popped (\x05%s\x01) after \x04%i \x01%s", zombieClassName, i+1, i+1 > 1 ? "tries" : "try");
 			return QueuedSI;
 		}
 		else
 		{
 			char reasonText[32];
+			char zombieClassName[32];
 			GetOverLimitReasonText(status, reasonText, sizeof(reasonText));
-			SOLog.Limits("Popping (\x05%s\x01) but \x03over limit \x01(\x03reason: %s\x01)", L4D2ZombieClassname[QueuedSI - 1], reasonText);
+			GetSafeZombieClassName(QueuedSI, zombieClassName, sizeof(zombieClassName));
+			SOLog.Limits("Popping (\x05%s\x01) but \x03over limit \x01(\x03reason: %s\x01)", zombieClassName, reasonText);
 		}
 	}
 	
@@ -137,7 +143,9 @@ int PopQueuedSI(int skip_client)
 		OverLimitReason status = IsClassOverLimit(SI, skip_client);
 		if (status == OverLimit_OK)
 		{
-			SOLog.Queue("Adding fallback class: %s", L4D2ZombieClassname[SI - 1]);
+			char zombieClassName[32];
+			GetSafeZombieClassName(SI, zombieClassName, sizeof(zombieClassName));
+			SOLog.Queue("Adding fallback class: %s", zombieClassName);
 			return SI;
 		}
 	}
@@ -183,9 +191,12 @@ void BuildOptimalQueue()
 	}
 	
 	// Second pass: Add rotation classes if queue is too small
-	if (totalAdded < 3)
+	// Use dynamic team size instead of hardcoded 3
+	int teamBasedQueueSize = z_max_player_zombies.IntValue / 2;
+	int minQueueSize = (teamBasedQueueSize > MIN_QUEUE_SIZE) ? teamBasedQueueSize : MIN_QUEUE_SIZE;
+	if (totalAdded < minQueueSize)
 	{
-		AddRotationClasses(queuedZombies, 3 - totalAdded);
+		AddRotationClasses(queuedZombies, minQueueSize - totalAdded);
 	}
 	
 	// Shuffle queue for better distribution
@@ -267,7 +278,7 @@ void FillQueue()
 	CollectZombies(zombies);
 	
 	char classString[255] = "";
-	for (int SI = SI_GENERIC_BEGIN; SI < SI_GENERIC_END; ++SI)
+	for (int SI = g_SIConfig.genericBegin; SI < g_SIConfig.genericEnd; ++SI)
 	{
 		// Use initial static limits for filling
 		int initialLimit = g_gameState.cvSILimits[SI].IntValue;
@@ -301,8 +312,8 @@ void FillQueue()
 }
 
 /**
- * Check if specific class can be queued based on initial SI pool
- * This maintains compatibility with original limit checking for incomplete teams
+ * Check if specific class can be queued based on dynamic adjusted limits
+ * This uses adjusted limits from rebalance instead of static limits
  */
 bool IsAbleToQueue(int SI, int skip_client)
 {
@@ -315,11 +326,18 @@ bool IsAbleToQueue(int SI, int skip_client)
 	CollectZombies(counts, skip_client);
 	CollectQueuedZombies(counts);
 	
-	if (counts[SI] < g_gameState.cvSILimits[SI].IntValue)
+	// Use adjusted limits from rebalance, not static limits
+	int maxAllowed = g_SpawnConfig.adjustedLimits[SI];
+	if (counts[SI] < maxAllowed)
+	{
 		return true;
-	
-	SOLog.Debug("Unexpected class (%s)", L4D2ZombieClassname[SI - 1]);
-	return false;
+	}
+	else
+	{
+		SOLog.Limits("Cannot queue \x05%s\x01 (count=\x04%d\x01 >= adjusted limit=\x04%d\x01)", 
+			L4D2ZombieClassname[SI - 1], counts[SI], maxAllowed);
+		return false;
+	}
 }
 
 /**
@@ -370,6 +388,11 @@ OverLimitReason IsClassOverLimit(int SI, int skip_client)
 	// NOTE: We're checking after player actually spawns, it's necessary to ignore his class.
 	CollectZombies(counts, skip_client);
 	
+	// Log detailed limit checking parameters
+	SOLog.Limits("Checking OverLimit for \x05%s\x01: current=\x04%d\x01, staticLimit=\x04%d\x01, adjustedLimit=\x04%d\x01", 
+		L4D2ZombieClassname[SI-1], counts[SI], 
+		g_gameState.cvSILimits[SI].IntValue, g_SpawnConfig.adjustedLimits[SI]);
+	
 	if (counts[SI] >= g_gameState.cvSILimits[SI].IntValue)
 	{
 		// Fire OnClassLimitHit forward
@@ -384,20 +407,30 @@ OverLimitReason IsClassOverLimit(int SI, int skip_client)
 	for (int i = g_SIConfig.genericBegin; i < g_SIConfig.genericEnd; ++i)
 		if (IsDominator(i)) dominatorCount += counts[i];
 	
+	// Log dominator checking parameters
+	SOLog.Limits("Dominator check for \x05%s\x01: dominatorCount=\x04%d\x01, maxDefault=\x043\x01", 
+		L4D2ZombieClassname[SI-1], dominatorCount);
+	
 	// Call forward to allow dominator limit override
 	int maxDominatorCount = 3;
 	int newLimit = maxDominatorCount;
 	Action limitResult = FireLimitExceededForward(FSO_LIMIT_DOMINATOR, dominatorCount, maxDominatorCount, newLimit);
 	if (limitResult == Plugin_Handled)
+	{
 		maxDominatorCount = newLimit;
+		SOLog.Limits("Forward overrode dominator limit: \x04%d -> %d\x01", 3, maxDominatorCount);
+	}
 	
 	if (dominatorCount >= maxDominatorCount)
 	{
+		SOLog.Limits("Dominator limit exceeded for \x05%s\x01: count=\x04%d\x01 >= limit=\x04%d\x01", 
+			L4D2ZombieClassname[SI-1], dominatorCount, maxDominatorCount);
 		// Fire OnDominatorLimitHit forward
 		FireDominatorLimitHitForward(SI, dominatorCount, maxDominatorCount);
 		return OverLimit_Dominator;
 	}
 	
+	SOLog.Limits("Class \x05%s\x01 passed all limit checks", L4D2ZombieClassname[SI-1]);
 	return OverLimit_OK;
 }
 
@@ -406,7 +439,7 @@ OverLimitReason IsClassOverLimit(int SI, int skip_client)
  */
 bool IsDominator(int SI)
 {
-	return g_Dominators & (1 << (SI-1)) > 0;
+	return (g_Dominators & (1 << (SI-1))) > 0;
 }
 
 // ====================================================================================================

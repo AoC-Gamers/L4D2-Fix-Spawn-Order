@@ -3,13 +3,139 @@
 [![SourceMod](https://img.shields.io/badge/SourceMod-1.11+-orange.svg)](https://www.sourcemod.net/)
 [![Left4DHooks](https://img.shields.io/badge/Left4DHooks-Required-red.svg)](https://forums.alliedmods.net/showthread.php?t=321696)
 [![License](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-4.5-green.svg)](https://github.com/AoC-Gamers/L4D2-Fix-Spawn-Order/releases)
+[![Version](https://img.shields.io/badge/Version-4.5-green.svg)](https://github.com/AoC-Gamers/L4D2-Fix-Spaw## 🔗 Related Projects
+
+- **[L4D2-Competitive-Rework](https://github.com/SirPlease/L4D2-Competitive-Rework)** - Complete competitive L4D2 server package including ZoneMod
+- **[Left4DHooks](https://forums.alliedmods.net/showthread.php?t=321696)** - Essential L4D2 SourceMod extension for game integration
+- **[l4d2_dominatorscontrol](https://github.com/SirPlease/L4D2-Competitive-Rework)** - Advanced dominator class configuration for quad-caps
+
+## 🧪 Testing & Validation
+
+### Recommended Test Scenarios
+
+1. **Different Game Modes**:
+   - 4v4 Versus (standard competitive)
+   - 3v3 Versus (reduced team size)
+   - 8v8 modes (if supported)
+
+2. **Dominator Configurations**:
+   - Standard ZoneMod (`l4d2_dominators "53"`) - Verify quad-caps work
+   - Vanilla L4D2 (`l4d2_dominators "53"` with limit enforcement) - Max 3 grabbers
+   - Custom configurations - Test specific class combinations
+
+3. **Edge Cases**:
+   - Player disconnections during spawns
+   - Tank replacement scenarios  
+   - Rapid rebalances and limit changes
+   - Safe area admin command interactions
+
+4. **Performance Testing**:
+   - Multiple consecutive rounds
+   - High player turnover scenarios
+   - Debug logging overhead verification
+
+### Using the Test Plugin
+
+Deploy `l4d2_fix_spawn_order_test.sp` alongside the main plugin and use the available commands to test quad-cap functionality and other features. Monitor test results in chat and console logs for verification.
+
+## 📚 References & Documentation
+
+- **[ZoneMod Documentation](https://github.com/SirPlease/L4D2-Competitive-Rework)** - Official competitive configuration
+- **[L4D2 SI Class Reference](https://developer.valvesoftware.com/wiki/Left_4_Dead_2)** - Valve's official class documentation
+- **[SourceMod API Documentation](https://sm.alliedmods.net/new-api/)** - Plugin development reference
+- **[Competitive L4D2 Community Wiki](https://github.com/SirPlease/L4D2-Competitive-Rework/wiki)** - Community knowledge base
+
+---
+
+*For support, feature requests, or bug reports related to competitive spawn mechanics, please [open an issue](https://github.com/AoC-Gamers/L4D2-Fix-Spawn-Order/issues)*eleases)
 
 A comprehensive SourceMod plugin for Left 4 Dead 2 that ensures reliable and balanced Special Infected (SI) spawn rotation in competitive gameplay, solving the inherent unpredictability of the AI Director's spawn system.
 
 ## 🎯 Overview
 
 The AI Director in Left 4 Dead 2 uses an unreliable spawn rotation system that can create unfair advantages in competitive scenarios. This plugin implements a **queue-based FIFO system with priority handling** to guarantee consistent and predictable SI spawns while respecting configured limits and dominator rules.
+
+## 🏆 Competitive L4D2 Spawn Mechanics (ZoneMod)
+
+### Fixed Special Infected Rotation (Spawn Order)
+
+In the competitive ZoneMod configuration of Left 4 Dead 2, the Special Infected spawn system is controlled and predictable. All playable Special Infected are numbered from 1 to 6 in a fixed order:
+
+| Index | Class | Role |
+|-------|-------|------|
+| 1 | **Smoker** | Long-range grabber |
+| 2 | **Boomer** | AOE debuffer |
+| 3 | **Hunter** | High-mobility damage dealer |
+| 4 | **Spitter** | Area denial |
+| 5 | **Jockey** | Mobility controller |
+| 6 | **Charger** | Displacement grabber |
+
+#### How the Rotation Works
+
+1. **Round Start**: The Director randomly selects four of these six classes for the "first hit" wave
+2. **Queue Formation**: The remaining two classes are queued for later use, ordered by their numerical index
+3. **Cyclical Selection**: If the Director starts from index 4 (Spitter), the first wave includes:
+   - Spitter (4) → Jockey (5) → Charger (6) → Smoker (1)
+4. **Death Re-queue**: When an SI dies, their class is added to the end of the queue
+5. **Predictable Rotation**: The composition rotates in a fixed pattern that can be completely predicted by tracking death order
+
+This logic is implemented in `l4d2_fix_spawn_order.sp`, which uses an internal queue to manage the SI sequence reliably.
+
+### Quad-Caps: Four Simultaneous Grabbers
+
+#### Default L4D2 Limitations
+
+In normal gameplay, Left 4 Dead 2 restricts to a maximum of 3 "dominator" infected (those capable of incapacitating survivors: Smoker, Hunter, Jockey, Charger) simultaneously. The game engine marks these four classes as dominators and prevents more than three from spawning at once (any attempt to spawn a fourth would result in "OverLimit_Dominator").
+
+#### ZoneMod Enhancement: Enabling Quad-Caps
+
+ZoneMod allows the possibility of **"Quad-Cap"** - where all four spawns can be grabbing infected simultaneously (all four survivors could be trapped at once). This is achieved by modifying the internal limitation through the `l4d2_dominatorscontrol.sp` plugin.
+
+**How it works:**
+
+1. **Dominator Flag Control**: The plugin allows changing the `bIsDominator` flag for each SI class
+2. **Bitmask Configuration**: Uses ConVar `l4d2_dominators` with a bitmask to indicate which classes count as dominators
+   - **Default "53"**: Binary `110101` = Smoker(1) + Hunter(1) + Jockey(1) + Charger(1), excluding Boomer(0) and Spitter(0)
+   - **Setting to "0"**: No class is treated as a dominator
+3. **Memory Modification**: ZoneMod effectively uses this technique to eliminate the 3-grabber limit
+4. **Individual Limits Preserved**: While respecting individual class limits (e.g., max 2 Hunters), the Director no longer blocks four-grabber combinations
+
+**Result**: As the plugin author describes: *"Changes bIsDominator flag... Allows to have native-order quad-caps"* - enabling quad-caps in the native spawn order.
+
+### Compatibility with Incomplete Teams (3v3 and Other Scenarios)
+
+Competitive matches typically feature 4v4 gameplay, but ZoneMod also supports 3v3 modes and other incomplete team situations.
+
+#### 3v3 Configuration Adjustments
+
+For 3v3 matches, the official ZoneMod configuration makes the following adjustments:
+
+```cfg
+survivor_limit 3                // Only 3 survivors
+z_max_player_zombies 3         // Only 3 infected per wave
+z_versus_boomer_limit 0        // Disable Boomer
+z_versus_spitter_limit 0       // Disable Spitter
+```
+
+**Rationale**: With one fewer infected, Boomer and Spitter are disabled to avoid "wasting" a slot on classes that cannot incapacitate survivors alone. This ensures that all three infected spawns are always grabbers (e.g., 1 Smoker, 1 Charger, 1 Hunter/Jockey), maintaining appropriate threat level with fewer players.
+
+#### Dynamic Team Size Adaptation
+
+The `l4d2_fix_spawn_order.sp` plugin includes special handling for these scenarios:
+
+- **Automatic Detection**: The plugin automatically detects team size via `z_max_player_zombies.IntValue`
+- **Queue Size Scaling**: Minimum queue size adapts to team composition
+- **Initial Wave Adjustment**: When the infected team isn't full, the system reduces maximum simultaneous infected and redefines initial rotation
+- **Invalid Combination Prevention**: Avoids invalid combinations or empty slots
+
+**Code Implementation**:
+```sourcepawn
+// Dynamic team size calculation
+int teamBasedQueueSize = z_max_player_zombies.IntValue / 2;
+int minQueueSize = (teamBasedQueueSize > MIN_QUEUE_SIZE) ? teamBasedQueueSize : MIN_QUEUE_SIZE;
+```
+
+These improvements ensure spawn order compatibility even with reduced team sizes, maintaining the philosophy of balanced and predictable gameplay regardless of whether teams are complete or incomplete.
 
 ## 🏗️ Architecture
 
@@ -107,18 +233,119 @@ l4d2_dominators "53"           // Bitmask: 53 = Smoker|Hunter|Jockey|Charger
 ```
 
 ### Dominator System
-The plugin supports configurable dominator classes through a bitmask system:
 
-| Class | Bit | Value | Description |
-|-------|-----|-------|-------------|
-| Smoker | 1 | 2 | Long-range disable |
-| Boomer | 2 | 4 | AOE debuff |
-| Hunter | 3 | 8 | High mobility damage |
-| Spitter | 4 | 16 | Area denial |
-| Jockey | 5 | 32 | Mobility control |
-| Charger | 6 | 64 | Displacement damage |
+The plugin supports configurable dominator classes through a bitmask system, enabling or disabling quad-cap functionality:
 
-**Default (53)**: Binary `110101` = Smoker(1) + Hunter(4) + Jockey(16) + Charger(32) = 53
+| Class | Bit Position | Binary Value | Decimal | Role in Quad-Caps |
+|-------|-------------|--------------|---------|-------------------|
+| Smoker | 1 | `000001` | 1 | Primary grabber |
+| Boomer | 2 | `000010` | 2 | AOE debuff (non-grabber) |
+| Hunter | 3 | `000100` | 4 | High-mobility grabber |
+| Spitter | 4 | `001000` | 8 | Area denial (non-grabber) |
+| Jockey | 5 | `010000` | 16 | Mobility grabber |
+| Charger | 6 | `100000` | 32 | Displacement grabber |
+
+#### Dominator Configuration Examples
+
+```cfg
+// Standard ZoneMod (allows quad-caps)
+l4d2_dominators "53"    // Binary: 110101 = Smoker + Hunter + Jockey + Charger
+                        // Result: 1+4+16+32 = 53 (4 grabbers as dominators)
+
+// Disable quad-caps (vanilla L4D2 behavior)  
+l4d2_dominators "53"    // Keep dominators, max 3 simultaneous
+// + ensure l4d2_dominatorscontrol enforces limits
+
+// No dominator limits (experimental)
+l4d2_dominators "0"     // Binary: 000000 = No classes as dominators
+                        // Result: Unlimited grabbers (not recommended)
+
+// 3v3 Configuration (grabbers only)
+l4d2_dominators "53"    // Same bitmask
+z_versus_boomer_limit "0"   // Disable non-grabbers
+z_versus_spitter_limit "0"  // Force grabber-only spawns
+```
+
+#### Understanding the Bitmask Calculation
+
+To create a custom dominator configuration:
+
+1. **Choose desired dominator classes**
+2. **Add their decimal values**:
+   - Smoker + Hunter + Jockey = 1 + 4 + 16 = **21**
+   - All grabbers = 1 + 4 + 16 + 32 = **53** (ZoneMod default)
+   - All classes = 1 + 2 + 4 + 8 + 16 + 32 = **63**
+
+**Pro Tip**: Use binary representation to visualize: `53 = 110101` shows positions 1,3,5,6 are set (Smoker, Hunter, Jockey, Charger).
+
+## 🎮 Administrative Commands
+
+The plugin provides several administrative commands for managing spawn behavior and safe area control:
+
+### Safe Area Control Commands
+
+```cfg
+// Force survivors to be considered as having left safe area
+sm_fso_force_safearea_exit
+
+// Reset safe area status (disable bot spawning)  
+sm_fso_reset_safearea
+
+// Check current safe area status
+sm_fso_check_safearea
+```
+
+#### Safe Area Spawn Control
+
+By default, the plugin prevents infected bots from spawning until survivors leave the safe area. This prevents immediate bot spawns at round start and ensures proper game flow.
+
+**Command Examples:**
+```
+// Admin forces early bot spawning
+] sm_fso_force_safearea_exit
+[FSO] Safe area status set to: Left (Bot spawning enabled)
+
+// Admin disables bot spawning temporarily
+] sm_fso_reset_safearea  
+[FSO] Safe area status set to: In Safe Area (Bot spawning disabled)
+
+// Check current status
+] sm_fso_check_safearea
+[FSO] Safe Area Status:
+  Plugin tracking: Left
+  Game state: Left
+  Bot spawning: Enabled
+```
+
+#### Status Monitoring
+
+The plugin continuously monitors safe area status and provides detailed logging:
+
+```
+[SO][Events] Round started - Survivors left safe area: Yes
+[SO][Events] First survivor PlayerName left safe area - Bot spawning now enabled
+[SO][Events] Admin PlayerName forced safe area exit - Bot spawning enabled
+```
+
+### API Testing Commands (Test Plugin)
+
+When using the companion test plugin (`l4d2_fix_spawn_order_test.sp`):
+
+```cfg
+// Start comprehensive API testing
+sm_fso_test_start
+
+// Stop continuous testing
+sm_fso_test_stop
+
+// Test specific components
+sm_fso_test_natives      // Test all native functions
+sm_fso_test_queue        // Test queue operations
+sm_fso_test_players      // Test player operations  
+sm_fso_test_state        // Test game state
+sm_fso_test_safearea     // Test safe area functionality
+sm_fso_test_all          // Run complete test suite
+```
 
 ## 🐛 Troubleshooting
 
@@ -222,13 +449,41 @@ This project is licensed under the **GNU General Public License v3.0** - see the
 
 ## 📈 Changelog
 
-### Version 4.5 (Current)
-- ✅ Complete modular refactoring  
-- ✅ Modern GlobalForward methodmap system
-- ✅ Comprehensive API with 9 natives and 12 forwards
-- ✅ Advanced debug logging with categorization
-- ✅ Improved dominator system integration
-- ✅ Enhanced player state tracking
+### Version 4.5 (Current) - Major Rework
+#### 🏗️ **Core System Improvements**
+- ✅ **Complete modular refactoring** - Separated into logical components
+- ✅ **Fixed IsDominator function** - Corrected bitmask evaluation for proper quad-caps
+- ✅ **Dynamic team size adaptation** - Automatically scales to 3v3, 4v4, and other configurations
+- ✅ **Initialization order correction** - Config → Queue → API for reliable startup
+
+#### 🎯 **Competitive Features**
+- ✅ **ZoneMod quad-cap support** - Proper dominator handling for 4-grabber combinations
+- ✅ **Safe area spawn control** - Bots only spawn after survivors leave safe area
+- ✅ **Predictable rotation system** - Maintains fixed spawn order as documented
+- ✅ **3v3 mode compatibility** - Automatic adjustments for incomplete teams
+
+#### 🛠️ **Stability & Reliability**
+- ✅ **Client index validation** - Eliminates "Client index 0 is invalid" crashes
+- ✅ **Array bounds checking** - Prevents "Array index out-of-bounds" errors
+- ✅ **Centralized validation** - `IsValidClientIndex()` function for consistency
+- ✅ **Robust error handling** - Graceful degradation when components fail
+
+#### 📊 **Enhanced Monitoring**
+- ✅ **Detailed queue composition logging** - Shows "2xSmoker, 1xHunter, 1xCharger" format
+- ✅ **Improved configuration reporting** - "Infected: 2 humans + 2 bots = 4/8"
+- ✅ **Administrative commands** - Safe area control and status checking
+- ✅ **Comprehensive test suite** - API testing plugin with 8 test categories
+
+#### 🔧 **Technical Enhancements**
+- ✅ **Modern GlobalForward methodmap system** - Future-proof API design
+- ✅ **9 natives and 12 forwards** - Complete API coverage for integration
+- ✅ **Categorized debug logging** - Queue, Limits, Events, Rebalance categories
+- ✅ **Memory optimization** - Efficient string handling and reduced allocations
+
+#### 🎮 **Admin Tools**
+- ✅ **Safe area commands** - `sm_fso_force_safearea_exit`, `sm_fso_reset_safearea`, `sm_fso_check_safearea`
+- ✅ **Real-time status monitoring** - Live feedback on spawn system state
+- ✅ **Configuration validation** - Automatic detection of setup issues
 
 ### Version 4.4.3 (Legacy)
 - ✅ Basic queue-based spawn ordering
