@@ -2,7 +2,8 @@
 
 [![SourceMod](https://img.shields.io/badge/SourceMod-1.11+-orange.svg)](https://www.sourcemod.net/)
 [![Left4DHooks](https://img.shields.io/badge/Left4DHooks-Required-red.svg)](https://forums.alliedmods.net/showthread.php?t=321696)
-[![Version](https://img.shields.io/badge/Version-4.5-green.svg)]
+[![l4d2_dominatorscontrol](https://img.shields.io/badge/l4d2_dominatorscontrol-Optional-yellow.svg)](https://github.com/SirPlease/L4D2-Competitive-Rework/blob/master/addons/sourcemod/scripting/l4d2_dominatorscontrol.sp)
+[![Version](https://img.shields.io/badge/Version-4.5-green.svg)
 
 A comprehensive SourceMod plugin for Left 4 Dead 2 that ensures reliable and balanced Special Infected (SI) spawn rotation in competitive gameplay, solving the inherent unpredictability of the AI Director's spawn system.
 
@@ -401,11 +402,9 @@ Enable debug logging to diagnose issues:
 
 - **[ZoneMod Documentation](https://github.com/SirPlease/L4D2-Competitive-Rework)** - Official competitive configuration
 - **[L4D2 SI Class Reference](https://developer.valvesoftware.com/wiki/Left_4_Dead_2)** - Valve's official class documentation
-- **[SourceMod API Documentation](https://sm.alliedmods.net/new-api/)** - Plugin development reference
-- **[Competitive L4D2 Community Wiki](https://github.com/SirPlease/L4D2-Competitive-Rework/wiki)** - Community knowledge base
 
 ## �🔗 Related Projects
 
 - **[L4D2-Competitive-Rework](https://github.com/SirPlease/L4D2-Competitive-Rework)** - Complete competitive L4D2 server package including ZoneMod
 - **[Left4DHooks](https://forums.alliedmods.net/showthread.php?t=321696)** - Essential L4D2 SourceMod extension for game integration
-- **[l4d2_dominatorscontrol](https://github.com/SirPlease/L4D2-Competitive-Rework)** - Advanced dominator class configuration for quad-caps
+- **[l4d2_dominatorscontrol](https://github.com/SirPlease/L4D2-Competitive-Rework/blob/master/addons/sourcemod/scripting/l4d2_dominatorscontrol.sp)** - Advanced dominator class configuration for quad-caps
