@@ -2,58 +2,48 @@
 
 [![SourceMod](https://img.shields.io/badge/SourceMod-1.11+-orange.svg)](https://www.sourcemod.net/)
 [![Left4DHooks](https://img.shields.io/badge/Left4DHooks-Required-red.svg)](https://forums.alliedmods.net/showthread.php?t=321696)
-[![License](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-4.5-green.svg)](https://github.com/AoC-Gamers/L4D2-Fix-Spaw## 🔗 Related Projects
-
-- **[L4D2-Competitive-Rework](https://github.com/SirPlease/L4D2-Competitive-Rework)** - Complete competitive L4D2 server package including ZoneMod
-- **[Left4DHooks](https://forums.alliedmods.net/showthread.php?t=321696)** - Essential L4D2 SourceMod extension for game integration
-- **[l4d2_dominatorscontrol](https://github.com/SirPlease/L4D2-Competitive-Rework)** - Advanced dominator class configuration for quad-caps
-
-## 🧪 Testing & Validation
-
-### Recommended Test Scenarios
-
-1. **Different Game Modes**:
-   - 4v4 Versus (standard competitive)
-   - 3v3 Versus (reduced team size)
-   - 8v8 modes (if supported)
-
-2. **Dominator Configurations**:
-   - Standard ZoneMod (`l4d2_dominators "53"`) - Verify quad-caps work
-   - Vanilla L4D2 (`l4d2_dominators "53"` with limit enforcement) - Max 3 grabbers
-   - Custom configurations - Test specific class combinations
-
-3. **Edge Cases**:
-   - Player disconnections during spawns
-   - Tank replacement scenarios  
-   - Rapid rebalances and limit changes
-   - Safe area admin command interactions
-
-4. **Performance Testing**:
-   - Multiple consecutive rounds
-   - High player turnover scenarios
-   - Debug logging overhead verification
-
-### Using the Test Plugin
-
-Deploy `l4d2_fix_spawn_order_test.sp` alongside the main plugin and use the available commands to test quad-cap functionality and other features. Monitor test results in chat and console logs for verification.
-
-## 📚 References & Documentation
-
-- **[ZoneMod Documentation](https://github.com/SirPlease/L4D2-Competitive-Rework)** - Official competitive configuration
-- **[L4D2 SI Class Reference](https://developer.valvesoftware.com/wiki/Left_4_Dead_2)** - Valve's official class documentation
-- **[SourceMod API Documentation](https://sm.alliedmods.net/new-api/)** - Plugin development reference
-- **[Competitive L4D2 Community Wiki](https://github.com/SirPlease/L4D2-Competitive-Rework/wiki)** - Community knowledge base
-
----
-
-*For support, feature requests, or bug reports related to competitive spawn mechanics, please [open an issue](https://github.com/AoC-Gamers/L4D2-Fix-Spawn-Order/issues)*eleases)
+[![Version](https://img.shields.io/badge/Version-4.5-green.svg)]
 
 A comprehensive SourceMod plugin for Left 4 Dead 2 that ensures reliable and balanced Special Infected (SI) spawn rotation in competitive gameplay, solving the inherent unpredictability of the AI Director's spawn system.
 
 ## 🎯 Overview
 
 The AI Director in Left 4 Dead 2 uses an unreliable spawn rotation system that can create unfair advantages in competitive scenarios. This plugin implements a **queue-based FIFO system with priority handling** to guarantee consistent and predictable SI spawns while respecting configured limits and dominator rules.
+
+## 📋 Requirements
+
+### Dependencies
+- **SourceMod 1.11+** - Plugin framework
+- **Left4DHooks** - L4D2 game integration and hooks
+- **l4d2_dominatorscontrol.sp** *(recommended)* - For advanced dominator configuration
+
+### Game Modes
+- Versus
+- Scavenge  
+- Any mode with player-controlled infected
+
+## 🚀 Installation
+
+### Automatic Installation
+1. Download the latest release from [Releases](https://github.com/AoC-Gamers/L4D2-Fix-Spawn-Order/releases)
+2. Extract to your `addons/sourcemod/` directory
+3. Restart the server or reload the plugin
+
+### File Structure
+```
+addons/sourcemod/
+├── plugins/
+│   └── l4d2_fix_spawn_order.smx
+├── scripting/
+│   ├── l4d2_fix_spawn_order.sp
+│   ├── fix_spawn_order/
+│   │   ├── fso_config.sp
+│   │   ├── fso_queue_limits.sp
+│   │   ├── fso_events.sp
+│   │   └── fso_api.sp
+│   └── include/
+│       └── fix_spawn_order.inc
+```
 
 ## 🏆 Competitive L4D2 Spawn Mechanics (ZoneMod)
 
@@ -167,55 +157,6 @@ graph TD
     K --> D
 ```
 
-## 📋 Requirements
-
-### Dependencies
-- **SourceMod 1.11+** - Plugin framework
-- **Left4DHooks** - L4D2 game integration and hooks
-- **l4d2_dominatorscontrol.sp** *(recommended)* - For advanced dominator configuration
-
-### Game Modes
-- Versus
-- Scavenge  
-- Any mode with player-controlled infected
-
-## 🚀 Installation
-
-### Automatic Installation
-1. Download the latest release from [Releases](https://github.com/AoC-Gamers/L4D2-Fix-Spawn-Order/releases)
-2. Extract to your `addons/sourcemod/` directory
-3. Restart the server or reload the plugin
-
-### Manual Compilation
-```bash
-# Clone the repository
-git clone https://github.com/AoC-Gamers/L4D2-Fix-Spawn-Order.git
-cd l4d2-fix-spawn-order
-
-# Compile with SourceMod compiler
-spcomp -i"scripting/include" scripting/l4d2_fix_spawn_order.sp
-
-# Install files
-cp compiled/l4d2_fix_spawn_order.smx ../gameserver/addons/sourcemod/plugins/
-cp scripting/include/fix_spawn_order.inc ../gameserver/addons/sourcemod/scripting/include/
-```
-
-### File Structure
-```
-addons/sourcemod/
-├── plugins/
-│   └── l4d2_fix_spawn_order.smx
-├── scripting/
-│   ├── l4d2_fix_spawn_order.sp
-│   ├── fix_spawn_order/
-│   │   ├── fso_config.sp
-│   │   ├── fso_queue_limits.sp
-│   │   ├── fso_events.sp
-│   │   └── fso_api.sp
-│   └── include/
-│       └── fix_spawn_order.inc
-```
-
 ## ⚙️ Configuration
 
 ### ConVars (Game Configuration)
@@ -327,6 +268,35 @@ The plugin continuously monitors safe area status and provides detailed logging:
 [SO][Events] Admin PlayerName forced safe area exit - Bot spawning enabled
 ```
 
+## 🧪 Testing & Validation
+
+### Recommended Test Scenarios
+
+1. **Different Game Modes**:
+   - 4v4 Versus (standard competitive)
+   - 3v3 Versus (reduced team size)
+   - 8v8 modes (if supported)
+
+2. **Dominator Configurations**:
+   - Standard ZoneMod (`l4d2_dominators "53"`) - Verify quad-caps work
+   - Vanilla L4D2 (`l4d2_dominators "53"` with limit enforcement) - Max 3 grabbers
+   - Custom configurations - Test specific class combinations
+
+3. **Edge Cases**:
+   - Player disconnections during spawns
+   - Tank replacement scenarios  
+   - Rapid rebalances and limit changes
+   - Safe area admin command interactions
+
+4. **Performance Testing**:
+   - Multiple consecutive rounds
+   - High player turnover scenarios
+   - Debug logging overhead verification
+
+### Using the Test Plugin
+
+Deploy `l4d2_fix_spawn_order_test.sp` alongside the main plugin and use the available commands to test quad-cap functionality and other features. Monitor test results in chat and console logs for verification.
+
 ### API Testing Commands (Test Plugin)
 
 When using the companion test plugin (`l4d2_fix_spawn_order_test.sp`):
@@ -389,52 +359,6 @@ Enable debug logging to diagnose issues:
 [SO][Limits] Popping (Smoker) but over limit (reason: Dominator limit)
 [SO][Events] Player connected to infected team as (Hunter)
 ```
-
-## 🤝 Contributing
-
-### Development Setup
-```bash
-# Fork and clone
-git clone https://github.com/AoC-Gamers/L4D2-Fix-Spawn-Order.git
-cd l4d2-fix-spawn-order
-
-# Create feature branch
-git checkout -b feature/your-improvement
-
-# Make changes and test
-# Commit and push
-git commit -m "Add your improvement"
-git push origin feature/your-improvement
-
-# Create Pull Request
-```
-
-### Code Standards
-- Follow SourcePawn naming conventions
-- Add comprehensive documentation for new functions
-- Include debug logging for new features
-- Maintain backward compatibility for API changes
-- Add test cases for critical functionality
-
-### Submitting Issues
-Please include:
-- L4D2 server version and platform
-- SourceMod and plugin versions
-- Gamemode and configuration details
-- Console logs with debug enabled
-- Steps to reproduce the issue
-
-## 📄 License
-
-This project is licensed under the **GNU General Public License v3.0** - see the [LICENSE](LICENSE) file for details.
-
-### License Summary
-- ✅ **Free to use, modify, and distribute**
-- ✅ **Source code must remain open**
-- ✅ **Commercial use allowed**
-- ⚠️ **Derivative works must use same license**
-- ⚠️ **No warranty provided**
-
 ## 🙏 Credits
 
 ### Original Development
@@ -456,18 +380,6 @@ This project is licensed under the **GNU General Public License v3.0** - see the
 - ✅ **Dynamic team size adaptation** - Automatically scales to 3v3, 4v4, and other configurations
 - ✅ **Initialization order correction** - Config → Queue → API for reliable startup
 
-#### 🎯 **Competitive Features**
-- ✅ **ZoneMod quad-cap support** - Proper dominator handling for 4-grabber combinations
-- ✅ **Safe area spawn control** - Bots only spawn after survivors leave safe area
-- ✅ **Predictable rotation system** - Maintains fixed spawn order as documented
-- ✅ **3v3 mode compatibility** - Automatic adjustments for incomplete teams
-
-#### 🛠️ **Stability & Reliability**
-- ✅ **Client index validation** - Eliminates "Client index 0 is invalid" crashes
-- ✅ **Array bounds checking** - Prevents "Array index out-of-bounds" errors
-- ✅ **Centralized validation** - `IsValidClientIndex()` function for consistency
-- ✅ **Robust error handling** - Graceful degradation when components fail
-
 #### 📊 **Enhanced Monitoring**
 - ✅ **Detailed queue composition logging** - Shows "2xSmoker, 1xHunter, 1xCharger" format
 - ✅ **Improved configuration reporting** - "Infected: 2 humans + 2 bots = 4/8"
@@ -480,22 +392,20 @@ This project is licensed under the **GNU General Public License v3.0** - see the
 - ✅ **Categorized debug logging** - Queue, Limits, Events, Rebalance categories
 - ✅ **Memory optimization** - Efficient string handling and reduced allocations
 
-#### 🎮 **Admin Tools**
-- ✅ **Safe area commands** - `sm_fso_force_safearea_exit`, `sm_fso_reset_safearea`, `sm_fso_check_safearea`
-- ✅ **Real-time status monitoring** - Live feedback on spawn system state
-- ✅ **Configuration validation** - Automatic detection of setup issues
-
 ### Version 4.4.3 (Legacy)
 - ✅ Basic queue-based spawn ordering
 - ✅ Simple limit validation
 - ✅ Core dominator support
 
-## 🔗 Related Projects
+## � References & Documentation
 
-- **[L4D2-Competitive-Rework](https://github.com/SirPlease/L4D2-Competitive-Rework)** - Complete competitive L4D2 server package
-- **[Left4DHooks](https://forums.alliedmods.net/showthread.php?t=321696)** - Essential L4D2 SourceMod extension
-- **[l4d2_dominatorscontrol](https://github.com/SirPlease/L4D2-Competitive-Rework)** - Advanced dominator class configuration
+- **[ZoneMod Documentation](https://github.com/SirPlease/L4D2-Competitive-Rework)** - Official competitive configuration
+- **[L4D2 SI Class Reference](https://developer.valvesoftware.com/wiki/Left_4_Dead_2)** - Valve's official class documentation
+- **[SourceMod API Documentation](https://sm.alliedmods.net/new-api/)** - Plugin development reference
+- **[Competitive L4D2 Community Wiki](https://github.com/SirPlease/L4D2-Competitive-Rework/wiki)** - Community knowledge base
 
----
+## �🔗 Related Projects
 
-*For support, feature requests, or bug reports, please [open an issue](https://github.com/AoC-Gamers/L4D2-Fix-Spawn-Order/issues)
+- **[L4D2-Competitive-Rework](https://github.com/SirPlease/L4D2-Competitive-Rework)** - Complete competitive L4D2 server package including ZoneMod
+- **[Left4DHooks](https://forums.alliedmods.net/showthread.php?t=321696)** - Essential L4D2 SourceMod extension for game integration
+- **[l4d2_dominatorscontrol](https://github.com/SirPlease/L4D2-Competitive-Rework)** - Advanced dominator class configuration for quad-caps
