@@ -5,11 +5,11 @@
 #include <left4dhooks>
 #include <colors>
 
-#define DEBUG 1
-#define DEBUG_QUEUE		1	// Queue operations and spawning
-#define DEBUG_LIMITS	1	// Limit checking and validation
-#define DEBUG_REBALANCE	1	// Rebalancing and configuration changes
-#define DEBUG_EVENTS	1	// Player events and state changes
+#define DEBUG 0
+#define DEBUG_QUEUE		0	// Queue operations and spawning
+#define DEBUG_LIMITS	0	// Limit checking and validation
+#define DEBUG_REBALANCE	0	// Rebalancing and configuration changes
+#define DEBUG_EVENTS	0	// Player events and state changes
 #define DEBUG_LOG_FILE	"logs/FixSpawnOrder.log"
 
 #define PLUGIN_VERSION "4.5"
@@ -158,7 +158,9 @@ methodmap SOLog
 		SOLog.WriteLog(SOLog_General, sFormat);
 	}
 	#else
-	public static void Debug(const char[] message, any...) {}
+	public static void Debug(const char[] message, any...) {
+		#pragma unused message
+	}
 	#endif
 
 	#if DEBUG && DEBUG_QUEUE
@@ -175,7 +177,9 @@ methodmap SOLog
 		SOLog.WriteLog(SOLog_Queue, sFormat);
 	}
 	#else
-	public static void Queue(const char[] message, any...) {}
+	public static void Queue(const char[] message, any...) {
+		#pragma unused message
+	}
 	#endif
 
 	#if DEBUG && DEBUG_LIMITS
@@ -192,7 +196,9 @@ methodmap SOLog
 		SOLog.WriteLog(SOLog_Limits, sFormat);
 	}
 	#else
-	public static void Limits(const char[] message, any...) {}
+	public static void Limits(const char[] message, any...) {
+		#pragma unused message
+	}
 	#endif
 	
 	#if DEBUG && DEBUG_REBALANCE
@@ -211,7 +217,9 @@ methodmap SOLog
 		SOLog.WriteLog(SOLog_Rebalance, sFormat);
 	}
 	#else
-	public static void Rebalance(const char[] message, any...) {}
+	public static void Rebalance(const char[] message, any...) {
+		#pragma unused message
+	}
 	#endif
 	
 	#if DEBUG && DEBUG_EVENTS
@@ -230,7 +238,9 @@ methodmap SOLog
 		SOLog.WriteLog(SOLog_Events, sFormat);
 	}
 	#else
-	public static void Events(const char[] message, any...) {}
+	public static void Events(const char[] message, any...) {
+		#pragma unused message
+	}
 	#endif
 }
 
