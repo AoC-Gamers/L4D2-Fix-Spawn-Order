@@ -1,6 +1,4 @@
 # 🎯 L4D2 Fix Spawn Order Plugin
-
-## 🛠️ Requisitos.io/badge/SourceMod-1.11+-orange.svg)](https://www.sourcemod.net/)
 [![Left4DHooks](https://img.shields.io/badge/Left4DHooks-Required-red.svg)](https://forums.alliedmods.net/showthread.php?t=321696)
 [![Version](https://img.shields.io/badge/Version-4.5-green.svg)](https://github.com/AoC-Gamers/L4D2-Fix-Spawn-Order/releases)
 [![License](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
