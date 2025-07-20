@@ -1,10 +1,5 @@
 # 🎯 L4D2 Fix Spawn Order Plugin
 
-[![SourceMod](http## 📚 Documentación Detallada
-
-- **[🏗️ Arquitectura](docs/ARCHITECTURE.md)** - Estructura técnica y algoritmos
-- **[🔄 Flujo del Plugin](docs/PLUGIN_FLOW.md)** - Explicación detallada del funcionamiento interno
-
 ## 🛠️ Requisitos.io/badge/SourceMod-1.11+-orange.svg)](https://www.sourcemod.net/)
 [![Left4DHooks](https://img.shields.io/badge/Left4DHooks-Required-red.svg)](https://forums.alliedmods.net/showthread.php?t=321696)
 [![Version](https://img.shields.io/badge/Version-4.5-green.svg)](https://github.com/AoC-Gamers/L4D2-Fix-Spawn-Order/releases)
