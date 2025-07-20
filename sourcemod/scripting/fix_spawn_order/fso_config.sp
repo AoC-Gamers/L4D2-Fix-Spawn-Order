@@ -129,17 +129,17 @@ void InitSpawnConfiguration()
  */
 void InitializeSILimitConVars()
 {
-	// Map SI classes to their ConVar names
+	// Map SI classes to their Versus ConVar names (for queue length calculation)
 	static const char sConVarNames[][] = {
 		"", // SI_None placeholder
-		"z_smoker_limit",
-		"z_boomer_limit", 
-		"z_hunter_limit",
-		"z_spitter_limit",
-		"z_jockey_limit",
-		"z_charger_limit",
-		"z_witch_limit",
-		"z_tank_limit"
+		"z_versus_smoker_limit",
+		"z_versus_boomer_limit", 
+		"z_versus_hunter_limit",
+		"z_versus_spitter_limit",
+		"z_versus_jockey_limit",
+		"z_versus_charger_limit",
+		"z_witch_limit",    // No versus variant for witch
+		"z_tank_limit"      // No versus variant for tank
 	};
 	
 	for (int i = g_SIConfig.genericBegin; i < g_SIConfig.genericEnd; i++)
@@ -151,7 +151,7 @@ void InitializeSILimitConVars()
 			g_gameState.iSILimit[i] = g_gameState.cvSILimits[i].IntValue;
 			g_gameState.iInitialSILimits[i] = g_gameState.iSILimit[i];
 			
-			SOLog.Rebalance("Hooked %s limit: %d", sConVarNames[i], g_gameState.iSILimit[i]);
+			SOLog.Rebalance("Hooked %s limit: %d (for queue length)", sConVarNames[i], g_gameState.iSILimit[i]);
 		}
 	}
 }
@@ -179,13 +179,15 @@ void ResetSpawnConfiguration()
 void UpdateSpawnConfiguration()
 {
 	int humanInfected = GetInfectedPlayerCount();
-	int totalInfected = GetTotalInfectedPlayers(); // From fso_queue_limits.sp
+	int totalInfected = GetTotalInfectedPlayers(); // From fso_queue_limits.sp - includes bots
 	int maxPlayers = g_cvSIMaxCapacity.IntValue;
 	
-	g_gameState.currentPlayerCount = humanInfected;
+	// Use total infected (humans + bots) for realistic team size calculation
+	g_gameState.currentPlayerCount = totalInfected;
 	g_gameState.expectedPlayerCount = maxPlayers;
 	
 	// Calculate scaling factor if dynamic scaling is enabled
+	// Use human count for scaling since bots adapt to balance
 	if (g_SpawnConfig.isDynamic && maxPlayers > 0)
 	{
 		g_SpawnConfig.scalingFactor = float(humanInfected) / float(maxPlayers);
@@ -199,16 +201,34 @@ void UpdateSpawnConfiguration()
 		g_SpawnConfig.scalingFactor = 1.0;
 	}
 	
+	SOLog.Rebalance("Updated spawn config: humans=%d, total=%d, max=%d, scaling=%.2f", 
+		humanInfected, totalInfected, maxPlayers, g_SpawnConfig.scalingFactor);
+	
 	// Update adjusted limits
 	UpdateAdjustedLimits();
+}
+
+/**
+ * Calculate total queue length based on z_versus_*_limit ConVars
+ * This determines how many classes total should be in the spawn queue
+ */
+int CalculateQueueLength()
+{
+	int totalQueueSlots = 0;
 	
-	// Create detailed status message
-	char queueInfo[256];
-	GetQueueCompositionString(queueInfo, sizeof(queueInfo));
+	for (int i = g_SIConfig.genericBegin; i < g_SIConfig.genericEnd; i++)
+	{
+		if (g_gameState.cvSILimits[i])
+		{
+			int classLimit = g_gameState.cvSILimits[i].IntValue;
+			totalQueueSlots += classLimit;
+			
+			SOLog.Queue("Queue slots for %s: %d", L4D2ZombieClassname[i - 1], classLimit);
+		}
+	}
 	
-	SOLog.Rebalance("Configuration updated - Infected: %d humans + %d bots = %d/%d, Scaling: %.2f", 
-		humanInfected, totalInfected - humanInfected, totalInfected, maxPlayers, g_SpawnConfig.scalingFactor);
-	SOLog.Rebalance("Queue composition: %s", queueInfo);
+	SOLog.Queue("Total calculated queue length: %d slots", totalQueueSlots);
+	return totalQueueSlots;
 }
 
 /**
@@ -360,78 +380,3 @@ public void OnPluginConVarChanged(ConVar convar, const char[] oldValue, const ch
 		}
 	}
 }
-
-// ====================================================================================================
-// QUEUE COMPOSITION UTILITIES
-// ====================================================================================================
-
-/**
- * Get a formatted string showing current queue composition by SI types
- */
-void GetQueueCompositionString(char[] buffer, int maxlen)
-{
-	// Get current queue size
-	int queueSize = g_SpawnsArray.Length;
-	
-	if (queueSize == 0)
-	{
-		strcopy(buffer, maxlen, "Empty");
-		return;
-	}
-	
-	// Count each SI type in queue
-	int counts[7]; // 0=none, 1=smoker, 2=boomer, 3=hunter, 4=spitter, 5=jockey, 6=charger
-	for (int i = 0; i < queueSize; i++)
-	{
-		int siClass = g_SpawnsArray.Get(i);
-		if (siClass >= 1 && siClass <= 6)
-		{
-			counts[siClass]++;
-		}
-	}
-	
-	// Build composition string
-	buffer[0] = '\0';
-	bool hasAny = false;
-	
-	for (int i = 1; i <= 6; i++)
-	{
-		if (counts[i] > 0)
-		{
-			char className[16];
-			GetSIClassName(i, className, sizeof(className));
-			
-			if (hasAny)
-			{
-				Format(buffer, maxlen, "%s, ", buffer);
-			}
-			
-			Format(buffer, maxlen, "%s%dx%s", buffer, counts[i], className);
-			hasAny = true;
-		}
-	}
-	
-	if (!hasAny)
-	{
-		strcopy(buffer, maxlen, "No valid SI in queue");
-	}
-}
-
-/**
- * Get SI class name by index
- */
-void GetSIClassName(int classIndex, char[] buffer, int maxlen)
-{
-	switch (classIndex)
-	{
-		case 1: strcopy(buffer, maxlen, "Smoker");
-		case 2: strcopy(buffer, maxlen, "Boomer");
-		case 3: strcopy(buffer, maxlen, "Hunter");
-		case 4: strcopy(buffer, maxlen, "Spitter");
-		case 5: strcopy(buffer, maxlen, "Jockey");
-		case 6: strcopy(buffer, maxlen, "Charger");
-		default: Format(buffer, maxlen, "Unknown(%d)", classIndex);
-	}
-}
-
-

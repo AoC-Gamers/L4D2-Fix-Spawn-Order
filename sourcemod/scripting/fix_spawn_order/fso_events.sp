@@ -75,13 +75,14 @@ public void OnClientPutInServer(int client)
 {
 	ResetPlayerState(client);
 	
-	if (IsFakeClient(client) || !IsClientInfected(client))
+	if (!IsClientInfected(client))
 		return;
 	
-	// Check if we need to trigger rebalance for new human player
+	// Check if we need to trigger rebalance for new player (human or bot)
 	if (g_gameState.isLive)
 	{
-		SOLog.Rebalance("Player %N joined infected team - triggering rebalance", client);
+		SOLog.Rebalance("Player %N (%s) joined infected team - triggering rebalance", 
+			client, IsFakeClient(client) ? "BOT" : "HUMAN");
 		ScheduleRebalance("player joined");
 	}
 }

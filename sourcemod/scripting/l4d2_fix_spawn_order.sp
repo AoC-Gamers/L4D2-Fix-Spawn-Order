@@ -284,10 +284,6 @@ public void OnPluginStart()
 	HookEvent("player_death", Event_PlayerDeath);
 	
 	z_max_player_zombies = FindConVar("z_max_player_zombies");
-	
-	RegAdminCmd("sm_fso_force_safearea_exit", Command_ForceSafeAreaExit, ADMFLAG_ROOT, "Force survivors to be considered as having left safe area");
-	RegAdminCmd("sm_fso_reset_safearea", Command_ResetSafeArea, ADMFLAG_ROOT, "Reset safe area status (disable bot spawning)");
-	RegAdminCmd("sm_fso_check_safearea", Command_CheckSafeArea, ADMFLAG_ROOT, "Check current safe area status");
 }
 
 public void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
@@ -399,56 +395,6 @@ stock void GetSafeZombieClassName(int zombieClass, char[] buffer, int maxlen)
 	}
 	
 	strcopy(buffer, maxlen, L4D2ZombieClassname[zombieClass - 1]);
-}
-
-// ====================================================================================================
-// SAFE AREA ADMIN COMMANDS
-// ====================================================================================================
-
-/**
- * Force survivors to be considered as having left safe area
- */
-public Action Command_ForceSafeAreaExit(int client, int args)
-{
-	g_bSurvivorsLeftSafeArea = true;
-	
-	SOLog.Events("Admin {olive}%N{default} forced safe area exit - Bot spawning enabled", client);
-	ReplyToCommand(client, "[FSO] Safe area status set to: Left (Bot spawning enabled)");
-	
-	return Plugin_Handled;
-}
-
-/**
- * Reset safe area status (disable bot spawning)
- */
-public Action Command_ResetSafeArea(int client, int args)
-{
-	g_bSurvivorsLeftSafeArea = false;
-	
-	SOLog.Events("Admin {olive}%N{default} reset safe area status - Bot spawning disabled", client);
-	ReplyToCommand(client, "[FSO] Safe area status set to: In Safe Area (Bot spawning disabled)");
-	
-	return Plugin_Handled;
-}
-
-/**
- * Check current safe area status
- */
-public Action Command_CheckSafeArea(int client, int args)
-{
-	bool actualStatus = L4D_HasAnySurvivorLeftSafeArea();
-	
-	ReplyToCommand(client, "[FSO] Safe Area Status:");
-	ReplyToCommand(client, "  Plugin tracking: {olive}%s{default}", g_bSurvivorsLeftSafeArea ? "Left" : "In Safe Area");
-	ReplyToCommand(client, "  Game state: {olive}%s{default}", actualStatus ? "Left" : "In Safe Area");
-	ReplyToCommand(client, "  Bot spawning: {olive}%s{default}", g_bSurvivorsLeftSafeArea ? "Enabled" : "Disabled");
-	
-	if (g_bSurvivorsLeftSafeArea != actualStatus)
-	{
-		ReplyToCommand(client, "  WARNING: Plugin state differs from game state!");
-	}
-	
-	return Plugin_Handled;
 }
 
 // ====================================================================================================

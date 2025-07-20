@@ -122,7 +122,11 @@ int PopQueuedSI(int skip_client)
 			
 			char zombieClassName[32];
 			GetSafeZombieClassName(QueuedSI, zombieClassName, sizeof(zombieClassName));
-			SOLog.Queue("Popped (\x05%s\x01) after \x04%i \x01%s", zombieClassName, i+1, i+1 > 1 ? "tries" : "try");
+			SOLog.Queue("Popped (\x05%s\x01) [%s] after \x04%i \x01%s", 
+				zombieClassName, 
+				IsDominator(QueuedSI) ? "DOMINATOR" : "NON-DOMINATOR",
+				i+1, i+1 > 1 ? "tries" : "try");
+			
 			return QueuedSI;
 		}
 		else
@@ -155,7 +159,7 @@ int PopQueuedSI(int skip_client)
 }
 
 /**
- * Build an optimal queue based on current game state
+ * Build an optimal queue based on current game state with natural rotation
  */
 void BuildOptimalQueue()
 {
@@ -168,7 +172,10 @@ void BuildOptimalQueue()
 	char classString[80] = "";  // Optimized: was 255, now 80 (sufficient for all class names)
 	int totalAdded = 0;
 	
-	// First pass: Add missing classes to reach minimum representation
+	// Clear queue before building
+	g_SpawnsArray.Clear();
+	
+	// Add missing classes to reach minimum representation (natural order, no priority)
 	for (int SI = g_SIConfig.genericBegin; SI < g_SIConfig.genericEnd; ++SI)
 	{
 		if (g_SpawnConfig.adjustedLimits[SI] <= 0)
@@ -190,27 +197,26 @@ void BuildOptimalQueue()
 			L4D2ZombieClassname[SI - 1], currentZombies[SI], g_SpawnConfig.adjustedLimits[SI], needed);
 	}
 	
-	// Second pass: Add rotation classes if queue is too small
-	// Use dynamic team size instead of hardcoded 3
-	int teamBasedQueueSize = z_max_player_zombies.IntValue / 2;
+	// Add rotation classes if queue is too small (natural representation)
+	int teamBasedQueueSize = z_max_player_zombies.IntValue + 2; // +2 for backup classes
 	int minQueueSize = (teamBasedQueueSize > MIN_QUEUE_SIZE) ? teamBasedQueueSize : MIN_QUEUE_SIZE;
 	if (totalAdded < minQueueSize)
 	{
 		AddRotationClasses(queuedZombies, minQueueSize - totalAdded);
 	}
 	
-	// Shuffle queue for better distribution
-	ShuffleQueue();
+	// Light shuffle for better distribution without destroying natural quad-cap opportunities
+	LightShuffleQueue();
 	
 	int idx = strlen(classString) - 2;
 	if (idx < 0) idx = 0;
 	classString[idx] = '\0';
 	
-	SOLog.Queue("Built optimal queue (%s) - Total: %d classes", classString, totalAdded);
+	SOLog.Queue("Built natural queue (%s) - Total: %d classes", classString, totalAdded);
 }
 
 /**
- * Add rotation classes to ensure minimum queue size
+ * Add rotation classes to ensure minimum queue size (legacy function)
  */
 void AddRotationClasses(int queuedZombies[SI_MAX_SIZE], int needed)
 {
@@ -247,29 +253,39 @@ void AddRotationClasses(int queuedZombies[SI_MAX_SIZE], int needed)
 }
 
 /**
- * Shuffle the spawn queue for better distribution
+ * Light shuffle to improve distribution while preserving natural quad-cap opportunities
+ * This only shuffles within small segments to avoid forcing artificial patterns
  */
-void ShuffleQueue()
+void LightShuffleQueue()
 {
 	int size = g_SpawnsArray.Length;
-	if (size <= 1) return;
+	if (size <= 3) return; // Don't shuffle very small queues
 	
-	// Fisher-Yates shuffle algorithm
-	for (int i = size - 1; i > 0; i--)
+	// Shuffle in small segments of 2-3 classes to maintain some natural flow
+	// This allows for quad-caps to develop naturally without forcing them
+	int segmentSize = 3;
+	for (int start = 0; start < size - 1; start += segmentSize)
 	{
-		int j = GetRandomInt(0, i);
+		int end = (start + segmentSize < size) ? start + segmentSize : size;
 		
-		int temp = g_SpawnsArray.Get(i);
-		g_SpawnsArray.Set(i, g_SpawnsArray.Get(j));
-		g_SpawnsArray.Set(j, temp);
+		// Mini Fisher-Yates shuffle within segment
+		for (int i = end - 1; i > start; i--)
+		{
+			int j = GetRandomInt(start, i);
+			
+			int temp = g_SpawnsArray.Get(i);
+			g_SpawnsArray.Set(i, g_SpawnsArray.Get(j));
+			g_SpawnsArray.Set(j, temp);
+		}
 	}
 	
-	SOLog.Queue("Queue shuffled for better distribution");
+	SOLog.Queue("Light shuffle applied - preserving natural rotation patterns");
 }
 
 /**
- * Fill queue with remaining first hit classes based on static limits
- * This function maintains compatibility with the original system for 6/8 team scenarios
+ * Fill queue based on z_versus_*_limit ConVars
+ * Queue length is determined by the sum of all z_versus_*_limit values
+ * Spawn capacity is determined by z_max_player_zombies
  */
 void FillQueue()
 {
@@ -278,23 +294,39 @@ void FillQueue()
 	CollectZombies(zombies);
 	
 	char classString[255] = "";
+	
+	// Calculate how many of each class should be in the queue based on z_versus_*_limit
 	for (int SI = g_SIConfig.genericBegin; SI < g_SIConfig.genericEnd; ++SI)
 	{
-		// Use initial static limits for filling
-		int initialLimit = g_gameState.cvSILimits[SI].IntValue;
+		if (!g_gameState.cvSILimits[SI])
+			continue;
+			
+		// Use z_versus_*_limit values to determine queue composition
+		int queueLimit = g_gameState.cvSILimits[SI].IntValue;
 		
-		for (int j = 0; j < initialLimit - zombies[SI]; ++j)
+		// Add each class to the queue according to its z_versus_*_limit
+		for (int j = 0; j < queueLimit; ++j)
 		{
 			g_SpawnsArray.Push(SI);
 			
 			StrCat(classString, sizeof(classString), L4D2ZombieClassname[SI - 1]);
 			StrCat(classString, sizeof(classString), STRING_SEPARATOR);
 		}
+		
+		SOLog.Queue("Added %d %s to queue (z_versus_%s_limit)", 
+			queueLimit, L4D2ZombieClassname[SI - 1], L4D2ZombieClassname[SI - 1]);
 	}
 	
 	int idx = strlen(classString) - 2;
 	if (idx < 0) idx = 0;
 	classString[idx] = '\0';
+	
+	// Calculate total queue length and current spawn capacity
+	int totalQueueLength = CalculateQueueLength(); // Sum of all z_versus_*_limit
+	int maxSpawnCapacity = z_max_player_zombies.IntValue; // Current spawn limit
+	
+	SOLog.Queue("Queue filled: %d total classes, %d max concurrent spawns", 
+		totalQueueLength, maxSpawnCapacity);
 	
 	// Fire OnQueueUpdated forward
 	if (g_fwdOnQueueUpdated != null)
